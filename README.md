@@ -22,43 +22,7 @@ export BASE_API_URL=http://domain.com (or public IP)
 ### Nginx
 
 ```conf
-upstream puma {
-  server unix:/var/www/dating_today_server/tmp/sockets/puma.sock fail_timeout=0;
-}
-
-upstream nuxt_client {
-  server unix:/var/run/dating_today_client.sock fail_timeout=0;
-}
-
-server {
-  listen 80;
-  # server_name localhost 127.0.0.1 dating_domain.com;
-  server_name localhost 127.0.0.1 54.150.137.228;
-
-  index index.html;
-
-  access_log stdout;
-  error_log  stderr warn;
-  access_log /var/log/nginx/dating.access.log;
-  error_log  /var/log/nginx/dating.error.log;
-
-  location /api/ {
-       proxy_pass http://puma;
-       proxy_set_header Upgrade $http_upgrade;
-       proxy_set_header Connection "upgrade";
-       proxy_set_header Host $host;
-  }
-
-  location / {
-     proxy_pass http://nuxt_client;
-
-     proxy_http_version 1.1;
-     proxy_set_header Upgrade $http_upgrade;
-     proxy_set_header Connection "upgrade";
-     proxy_set_header Host $host;
-     proxy_cache_bypass $http_upgrade;
-  }
-}
+// update later
 ```
 
 ### PM2
@@ -69,9 +33,9 @@ Tạo thư mục client_deploy (hoặc đặt trong shared nếu dùng capistran
 module.exports = {
    apps : [{
      name: 'dating_today_client',
-     cwd: '/var/www/dating_today_client',  
-     script: '/var/www/dating_today_client/node_modules/.bin/nuxt',
-     args: 'start -n /var/run/dating_today_client.sock',
+     cwd: '/var/www/nodejs_skeleton',  
+     script: '/var/www/nodejs_skeleton/node_modules/.bin/nuxt',
+     args: 'start -n /var/run/nodejs_skeleton.sock',
      "exec_mode": "cluster_mode",
      instances: 2,
      max_memory_restart: '300M',
@@ -83,7 +47,7 @@ module.exports = {
 ```
 
 ### Grant Access
-Cấp quyền cho user `lbapp` để tạo unix socket `dating_today_client.sock` (daemon) trong run. (Cái này khi server reboot bị mất. -> Tìm cách set quyền vĩnh viễn hoặc tự động set lại khi reboot server)
+Cấp quyền cho user `lbapp` để tạo unix socket `nodejs_skeleton.sock` (daemon) trong run. (Cái này khi server reboot bị mất. -> Tìm cách set quyền vĩnh viễn hoặc tự động set lại khi reboot server)
 
 ```bash
 $ sudo chown lbapp:lbapp /var/run
@@ -94,8 +58,8 @@ $ sudo chown lbapp:lbapp /var/run
 
 ### Init.d Script
 
-- Tạo 1 Script tên `dating_today_client` như dưới trong `/etc/init.d/dating_today_client`
-- Cấp quyền: `sudo chmod 755 /etc/init.d/dating_today_client`
+- Tạo 1 Script tên `nodejs_skeleton` như dưới trong `/etc/init.d/nodejs_skeleton`
+- Cấp quyền: `sudo chmod 755 /etc/init.d/nodejs_skeleton`
 
 ```bash
 #!/bin/bash
@@ -114,11 +78,11 @@ $ sudo chown lbapp:lbapp /var/run
 # Description: PM2 is the next gen process manager for Node.js
 ### END INIT INFO
 
-NAME=dating_today_client
+NAME=nodejs_skeleton
 PM2=/usr/local/bin/pm2
 NODE=/usr/local/bin/node
 USER=lbapp
-SOCKET_FILE_PATH=/var/run/dating_today_client.sock
+SOCKET_FILE_PATH=/var/run/nodejs_skeleton.sock
 # TODO: Should move config file to shared directory?
 CONFIG_FILE_PATH=/home/lbapp/client_deploy/ecosystem.config.js
 
@@ -206,22 +170,22 @@ Cũng giống như các câu lệnh của webserver như nginx. Khi bị lỗi c
 
 - Start PM2
 ```
-sudo /etc/init.d/dating_today_client start
+sudo /etc/init.d/nodejs_skeleton start
 ```
 
 - Stop PM2
 ```
-sudo /etc/init.d/dating_today_client stop
+sudo /etc/init.d/nodejs_skeleton stop
 ```
 
 - Restart PM2
 ```
-sudo /etc/init.d/dating_today_client restart
+sudo /etc/init.d/nodejs_skeleton restart
 ```
 
 - Check Status
 ```
-sudo /etc/init.d/dating_today_client status
+sudo /etc/init.d/nodejs_skeleton status
 ```
 
 
@@ -237,5 +201,5 @@ sudo yarn nuxt build
 ```
 3. Chạy script đã tạo ở trên để khởi động lại pm2
 ```
-sudo /etc/init.d/dating_today_client restart
+sudo /etc/init.d/nodejs_skeleton restart
 ```
