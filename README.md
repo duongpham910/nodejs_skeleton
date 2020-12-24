@@ -32,7 +32,7 @@ Tạo thư mục client_deploy (hoặc đặt trong shared nếu dùng capistran
 // Options reference: https://pm2.io/doc/en/runtime/reference/ecosystem-file/
 module.exports = {
    apps : [{
-     name: 'dating_today_client',
+     name: 'nodejs_skeleton',
      cwd: '/var/www/nodejs_skeleton',  
      script: '/var/www/nodejs_skeleton/node_modules/.bin/nuxt',
      args: 'start -n /var/run/nodejs_skeleton.sock',
