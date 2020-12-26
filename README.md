@@ -1,7 +1,26 @@
 # nodejs_skeleton
-just for normal nodejs project
 
-# Deployment
+## Init project
+
+```
+npx express-generator --view=ejs --git
+```
+
+Refer to https://expressjs.com/en/starter/generator.html
+
+# Capistrano (LOCAL SIDE)
+
+## Prerequisite
+
+### Setup
+- Gem install
+
+```
+gem install capistrano
+gem install capistrano-npm
+```
+
+# Deployment (SERVER SIDE)
 
 ## Prerequisite
 
@@ -33,7 +52,7 @@ Tạo thư mục client_deploy (hoặc đặt trong shared nếu dùng capistran
 module.exports = {
    apps : [{
      name: 'nodejs_skeleton',
-     cwd: '/var/www/nodejs_skeleton',  
+     cwd: '/var/www/nodejs_skeleton',
      script: '/var/www/nodejs_skeleton/node_modules/.bin/nuxt',
      args: 'start -n /var/run/nodejs_skeleton.sock',
      "exec_mode": "cluster_mode",
