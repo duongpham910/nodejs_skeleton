@@ -1,6 +1,6 @@
 # nodejs_skeleton
 
-## Init project
+Init project
 
 ```
 npx express-generator --view=ejs --git
@@ -14,10 +14,80 @@ Refer to https://expressjs.com/en/starter/generator.html
 
 ### Setup
 - Gem install
+- Bundle init
+
+Make new gemfile content below and run `bundle install`. Then capify with command `cap install`
 
 ```
-gem install capistrano
-gem install capistrano-npm
+source 'https://rubygems.org'
+
+git_source(:github) {|repo_name| "https://github.com/#{repo_name}" }
+
+group :development do
+  gem 'capistrano', require: false
+  gem 'capistrano-npm', require: false
+end
+
+```
+
+Generate file config with command `$ cap install`. Open `Capfile` and uncomment these require below
+
+```
+# Load DSL and set up stages
+require 'capistrano/setup'
+require 'capistrano/deploy'
+require 'capistrano/scm/git'
+install_plugin Capistrano::SCM::Git
+require 'capistrano/npm'
+require 'capistrano/slackify'
+
+Dir.glob('lib/capistrano/tasks/*.rake').each { |r| import r }
+```
+
+Next job is update file `config/deploy.rb`
+
+```
+# config valid for current version and patch releases of Capistrano
+lock "~> 3.14.1"
+
+set :application, 'nodejs_skeleton'
+set :repo_url, 'git@github.com:duongpham910/nodejs_skeleton.git'
+set :keep_releases, 5
+set :deploy_to, '/var/www/nodejs_skeleton'
+
+namespace :deploy do
+  desc 'Restart pm2'
+  task :restart_app do
+    on roles(:app) do
+      execute 'sudo /etc/init.d/nodejs_skeleton restart'
+    end
+  end
+
+  before :finished, :restart_app
+end
+```
+
+Depend on deploy environment(in this case is staging). Open file config/deploy/staging.rb
+
+```
+set :user, 'ec2-user'
+set :stage, :staging
+set :ssh_options, {
+  keys: %w(~/key.pem),
+  forward_agent: false,
+  auth_methods: %w(publickey)
+}
+
+# Pass varibale to deploy from different git branches
+set :deploy_ref, ENV['DEPLOY_REF']
+if fetch(:deploy_ref)
+ set :branch, fetch(:deploy_ref)
+else
+ set :branch, 'master'
+end
+
+# Setup IP with ec2 server
+server '', user: fetch(:user), roles: %w[app web]
 ```
 
 # Deployment (SERVER SIDE)
@@ -29,33 +99,70 @@ gem install capistrano-npm
 - PM2
 - Node (& yarn or npm)
 
-### Environment variables
+### App preparation
+Create directory /var/www/nodejs_skeleton
 ```
-export BASE_SSR_API_URL=http://localhost:3000
-export BASE_API_URL=http://domain.com (or public IP)
+sudo chmod -R 777 /www
 ```
 
+Inside nodejs_skeleton dir create prerequisite folder for capistrano
+```
+repo
+releases
+shared
+```
 
 ## Configuration
 
 ### Nginx
 
+Create config file `sudo vi /etc/nginx/conf.d/nodejs_skeleton.conf `
+
 ```conf
-// update later
+server {
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+    }
+}
+
+```
+
+Edit nginx.config `sudo vi /etc/nginx/nginx.conf`
+```
+       #  listen       80 default_server;
+       #  listen       [::]:80 default_server;
+       #  server_name  _;
+       #  root         /usr/share/nginx/html;
+```
+
+​Check status
+```
+sudo nginx -t
+​
+Still error: nginx: [warn] conflicting server name "" on 0.0.0.0:80, ignored
+
+```
+
+Auto launch nginx
+```
+sudo chkconfig nginx on
+sudo service nginx start/stop
 ```
 
 ### PM2
-Tạo thư mục client_deploy (hoặc đặt trong shared nếu dùng capistrano) rồi tạo file config cho PM2 như dưới với cluster 2 instance và chạy qua unix socket
-
+Create folder client_deploy (or put in shared if using capistrano) then create file config for PM2 like below with cluster 2 instance
 ```js
 // Options reference: https://pm2.io/doc/en/runtime/reference/ecosystem-file/
 module.exports = {
    apps : [{
      name: 'nodejs_skeleton',
-     cwd: '/var/www/nodejs_skeleton',
-     script: '/var/www/nodejs_skeleton/node_modules/.bin/nuxt',
-     args: 'start -n /var/run/nodejs_skeleton.sock',
-     "exec_mode": "cluster_mode",
+     cwd: '/var/www/nodejs_skeleton/current',
+     script: '/var/www/nodejs_skeleton/current/bin/www',
+     exec_mode: 'cluster_mode',
      instances: 2,
      max_memory_restart: '300M',
      env: {
@@ -65,20 +172,10 @@ module.exports = {
 };
 ```
 
-### Grant Access
-Cấp quyền cho user `lbapp` để tạo unix socket `nodejs_skeleton.sock` (daemon) trong run. (Cái này khi server reboot bị mất. -> Tìm cách set quyền vĩnh viễn hoặc tự động set lại khi reboot server)
-
-```bash
-$ sudo chown lbapp:lbapp /var/run
-```
-
-**Nếu đặt trong thư mục `tmp` của project thì không cần.**
-
-
 ### Init.d Script
 
-- Tạo 1 Script tên `nodejs_skeleton` như dưới trong `/etc/init.d/nodejs_skeleton`
-- Cấp quyền: `sudo chmod 755 /etc/init.d/nodejs_skeleton`
+- Create script name `nodejs_skeleton` with content below `/etc/init.d/nodejs_skeleton`
+- Change permission: `sudo chmod 755 /etc/init.d/nodejs_skeleton`
 
 ```bash
 #!/bin/bash
@@ -100,13 +197,11 @@ $ sudo chown lbapp:lbapp /var/run
 NAME=nodejs_skeleton
 PM2=/usr/local/bin/pm2
 NODE=/usr/local/bin/node
-USER=lbapp
-SOCKET_FILE_PATH=/var/run/nodejs_skeleton.sock
-# TODO: Should move config file to shared directory?
-CONFIG_FILE_PATH=/home/lbapp/client_deploy/ecosystem.config.js
+USER=ec2-user
+CONFIG_FILE_PATH=/home/ec2-user/client_deploy/ecosystem.config.js
 
 export PATH=/usr/local/bin:$PATH
-export PM2_HOME="/home/lbapp/.pm2"
+export PM2_HOME="/home/ec2-user/.pm2"
 
 get_user_shell() {
     local shell
@@ -129,14 +224,6 @@ super() {
 start() {
     echo "Starting $NAME"
     super $PM2 start $CONFIG_FILE_PATH --update-env
-    for i in {0..30}; do
-        echo "Waiting for creating socket file..."
-        if [ -e $SOCKET_FILE_PATH ]; then
-            break
-        fi
-        sleep 1
-    done
-    chmod o+w $SOCKET_FILE_PATH
 }
 
 stop() {
@@ -144,9 +231,6 @@ stop() {
 }
 
 restart() {
-    if [ -e $SOCKET_FILE_PATH ]; then
-       rm -rf $SOCKET_FILE_PATH
-    fi
     echo "Restarting $NAME"
     stop
     start
@@ -184,8 +268,8 @@ esac
 exit $RETVAL
 ```
 
-**Một số lệnh**
-Cũng giống như các câu lệnh của webserver như nginx. Khi bị lỗi cũng có thể stop/start hoặc restart.
+**Commands**
+Like commands of webserver, ex: nginx. If error happen can stop/start or restart.
 
 - Start PM2
 ```
@@ -207,18 +291,9 @@ sudo /etc/init.d/nodejs_skeleton restart
 sudo /etc/init.d/nodejs_skeleton status
 ```
 
-
 ## Deploy
 
-1. Chạy yarn (npm) install
 ```
-yarn install
-```
-2. Yarn (npm) Build (build nuxt)
-```
-sudo yarn nuxt build
-```
-3. Chạy script đã tạo ở trên để khởi động lại pm2
-```
-sudo /etc/init.d/nodejs_skeleton restart
+cap staging deploy // Deploy code base from develop branch
+cap staging deploy DEPLOY_REF=A // Deploy code from branch A
 ```
